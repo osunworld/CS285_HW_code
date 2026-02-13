@@ -140,11 +140,8 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         # return more flexible objects, such as a
         # `torch.distributions.Distribution` object. It's up to you!
         observations = observation.to(ptu.device)
-        mean = self.mean_net(observations)
-        std = torch.exp(self.logstd)
-        dist = distributions.Normal(mean, std)
-        action = dist.rsample()
-        return action
+        # For supervised BC, use deterministic actions from the mean network.
+        return self.mean_net(observations)
 
     def update(self, observations, actions):
         """
