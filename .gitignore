@@ -127,3 +127,13 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# local env / IDE
+/cs285/
+/.vscode/
+
+# experiment outputs
+hw1/data/
+hw1/run_logs/
+hw2/data/
+*.tfevents.*
