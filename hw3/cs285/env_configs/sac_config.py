@@ -46,7 +46,16 @@ def sac_config(
     actor_fixed_std: Optional[float] = None,
     use_tanh: bool = True,
 ):
+    # ------------------------------------------------------------------
+    # 이 함수는 "실험 설정(dict)"을 만들어 run_hw3_sac.py로 넘겨준다.
+    # 핵심은 아래 make_* 팩토리 함수들:
+    # - make_actor / make_critic: 네트워크 구조
+    # - make_*_optimizer: 최적화기
+    # - make_lr_schedule: 학습률 스케줄
+    # - make_env: 환경 wrapper 체인
+    # ------------------------------------------------------------------
     def make_critic(observation_shape: Tuple[int, ...], action_dim: int) -> nn.Module:
+        # SAC critic은 Q(s,a)를 직접 회귀하므로 입력 차원은 ob_dim + ac_dim
         return StateActionCritic(
             ob_dim=np.prod(observation_shape),
             ac_dim=action_dim,
@@ -57,6 +66,7 @@ def sac_config(
     def make_actor(observation_shape: Tuple[int, ...], action_dim: int) -> nn.Module:
         assert len(observation_shape) == 1
         if actor_fixed_std is not None:
+            # 표준편차를 상수로 고정: 학습 안정성 디버깅 시 유용
             return MLPPolicy(
                 ac_dim=action_dim,
                 ob_dim=np.prod(observation_shape),
@@ -68,6 +78,7 @@ def sac_config(
                 fixed_std=actor_fixed_std,
             )
         else:
+            # 상태의존 표준편차: 일반적으로 표현력이 더 높음
             return MLPPolicy(
                 ac_dim=action_dim,
                 ob_dim=np.prod(observation_shape),
@@ -79,6 +90,7 @@ def sac_config(
             )
 
     def make_actor_optimizer(params: torch.nn.ParameterList) -> torch.optim.Optimizer:
+        # actor/critic을 분리 학습할 수 있게 LR를 따로 둔다.
         return torch.optim.Adam(params, lr=actor_learning_rate)
 
     def make_critic_optimizer(params: torch.nn.ParameterList) -> torch.optim.Optimizer:
@@ -87,9 +99,15 @@ def sac_config(
     def make_lr_schedule(
         optimizer: torch.optim.Optimizer,
     ) -> torch.optim.lr_scheduler._LRScheduler:
+        # 기본 과제에서는 고정 학습률 사용
         return torch.optim.lr_scheduler.ConstantLR(optimizer, factor=1.0)
 
     def make_env(render: bool = False):
+        # wrapper 순서:
+        # 1) gym.make
+        # 2) RescaleAction: 환경 행동 범위를 [-1,1]로 표준화
+        # 3) ClipAction: 행동 클리핑으로 안정성 보강
+        # 4) RecordEpisodeStatistics: episode return/length 자동 기록
         return RecordEpisodeStatistics(
             ClipAction(
                 RescaleAction(
@@ -102,6 +120,8 @@ def sac_config(
             )
         )
 
+    # 로그 디렉토리 이름에 주요 하이퍼파라미터를 인코딩
+    # (실험 결과 비교 시 매우 중요)
     log_string = "{}_{}_{}_s{}_l{}_alr{}_clr{}_b{}_d{}".format(
         exp_name or "offpolicy_ac",
         env_name,
@@ -127,6 +147,8 @@ def sac_config(
 
     return {
         "agent_kwargs": {
+            # TODO 구현 시 주의:
+            # SoftActorCritic.__init__ 시그니처와 key 이름이 일치해야 한다.
             "make_critic": make_critic,
             "make_critic_optimizer": make_actor_optimizer,
             "make_critic_schedule": make_lr_schedule,
@@ -150,6 +172,7 @@ def sac_config(
             if use_soft_target_update
             else None,
         },
+        # replay buffer 용량이 작으면 off-policy 학습 다양성이 급격히 줄어든다.
         "replay_buffer_capacity": replay_buffer_capacity,
         "log_name": log_string,
         "total_steps": total_steps,

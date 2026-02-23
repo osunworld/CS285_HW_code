@@ -25,24 +25,36 @@ import argparse
 
 
 def run_training_loop(config: dict, logger: Logger, args: argparse.Namespace):
+    # ------------------------------------------------------------
+    # 1) 실험 재현성 + 디바이스 설정
+    # ------------------------------------------------------------
     # set random seeds
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     ptu.init_gpu(use_gpu=not args.no_gpu, gpu_id=args.which_gpu)
 
+    # ------------------------------------------------------------
+    # 2) 환경 생성: 학습/평가/렌더를 분리해서 사용
+    # ------------------------------------------------------------
     # make the gym environment
     env = config["make_env"]()
     eval_env = config["make_env"]()
     render_env = config["make_env"](render=True)
 
+    # 한 에피소드 최대 길이와 SGD 배치 크기 결정
+    # - ep_len: yaml에서 지정하지 않으면 환경 기본값 사용
+    # - batch_size: 매 update마다 replay buffer에서 뽑을 transition 수
     ep_len = config["ep_len"] or env.spec.max_episode_steps
     batch_size = config["batch_size"] or batch_size
 
+    # SAC 구현은 현재 연속 행동공간만 지원한다.
+    # (이산 행동은 DQN 파이프라인 사용)
     discrete = isinstance(env.action_space, gym.spaces.Discrete)
     assert (
         not discrete
     ), "Our actor-critic implementation only supports continuous action spaces. (This isn't a fundamental limitation, just a current implementation decision.)"
 
+    # 관측/행동 차원은 네트워크 생성 시 필수
     ob_shape = env.observation_space.shape
     ac_dim = env.action_space.shape[0]
 
@@ -52,6 +64,9 @@ def run_training_loop(config: dict, logger: Logger, args: argparse.Namespace):
     else:
         fps = env.env.metadata["render_fps"]
 
+    # ------------------------------------------------------------
+    # 3) 에이전트/리플레이버퍼 초기화
+    # ------------------------------------------------------------
     # initialize agent
     agent = SoftActorCritic(
         ob_shape,
@@ -59,16 +74,24 @@ def run_training_loop(config: dict, logger: Logger, args: argparse.Namespace):
         **config["agent_kwargs"],
     )
 
+    # off-policy 핵심 구성요소:
+    # 환경에서 모은 transition을 저장해두고 랜덤 샘플링해 학습한다.
     replay_buffer = ReplayBuffer(config["replay_buffer_capacity"])
 
+    # 현재 state(observation) 시작값
     observation = env.reset()
 
+    # ------------------------------------------------------------
+    # 4) 메인 학습 루프
+    # ------------------------------------------------------------
     for step in tqdm.trange(config["total_steps"], dynamic_ncols=True):
+        # warmup 단계에서는 랜덤 행동으로 데이터 다양성을 확보
         if step < config["random_steps"]:
             action = env.action_space.sample()
         else:
             # TODO(student): Select an action
-            action = ...
+            # 학습된 정책(actor)로 현재 관측에서 행동 샘플링
+            action = agent.get_action(observation)
 
         # Step the environment and add the data to the replay buffer
         next_observation, reward, done, info = env.step(action)
@@ -81,17 +104,34 @@ def run_training_loop(config: dict, logger: Logger, args: argparse.Namespace):
         )
 
         if done:
+            # RecordEpisodeStatistics wrapper가 episode return/length를 info에 넣어준다.
             logger.log_scalar(info["episode"]["r"], "train_return", step)
             logger.log_scalar(info["episode"]["l"], "train_ep_len", step)
             observation = env.reset()
         else:
             observation = next_observation
 
+        # --------------------------------------------------------
+        # 5) 업데이트 구간
+        # --------------------------------------------------------
         # Train the agent
         if step >= config["training_starts"]:
             # TODO(student): Sample a batch of config["batch_size"] transitions from the replay buffer
-            batch = ...
-            update_info = ...
+            # batch에는 보통 obs/acts/rews/next_obs/dones가 들어간다.
+            batch = replay_buffer.sample(config["batch_size"])
+            batch = ptu.from_numpy(batch)
+            # TODO(student): agent.update(...) 호출
+            # - critic 업데이트(bootstrapping)
+            # - actor 업데이트(E[Q] 최대화)
+            # - target critic 업데이트(hard/soft)
+            update_info = agent.update(
+                observations=batch["observations"],
+                actions=batch["actions"],
+                rewards=batch["rewards"],
+                next_observations=batch["next_observations"],
+                dones=batch["dones"],
+                step=step,
+            )
 
             # Logging
             update_info["actor_lr"] = agent.actor_lr_scheduler.get_last_lr()[0]
@@ -103,6 +143,9 @@ def run_training_loop(config: dict, logger: Logger, args: argparse.Namespace):
                     logger.log_scalars
                 logger.flush()
 
+        # --------------------------------------------------------
+        # 6) 주기적 평가(탐험 없는 정책 성능 확인)
+        # --------------------------------------------------------
         # Run evaluation
         if step % args.eval_interval == 0:
             trajectories = utils.sample_n_trajectories(
@@ -144,6 +187,7 @@ def run_training_loop(config: dict, logger: Logger, args: argparse.Namespace):
 
 
 def main():
+    # CLI 인자: config 파일 + 로깅/평가 주기 + 디바이스 옵션
     parser = argparse.ArgumentParser()
     parser.add_argument("--config_file", "-cfg", type=str, required=True)
 
@@ -161,9 +205,11 @@ def main():
     # create directory for logging
     logdir_prefix = "hw3_sac_"  # keep for autograder
 
+    # yaml 설정 로드 + 로그 디렉토리 생성
     config = make_config(args.config_file)
     logger = make_logger(logdir_prefix, config)
 
+    # 실제 학습 루프 시작
     run_training_loop(config, logger, args)
 
 
