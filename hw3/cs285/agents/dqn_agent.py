@@ -45,7 +45,7 @@ class DQNAgent(nn.Module):  # DQN 에이전트(critic + target critic) 클래스
 
         self.update_target_critic()  # 시작 시 target <- online으로 동기화
 
-    def get_action(self, observation: np.ndarray, epsilon: float = 0.02) -> int:
+    def get_action(self, observation: np.ndarray, epsilon: float = 0.0) -> int:
         """
         Used for evaluation.
         """

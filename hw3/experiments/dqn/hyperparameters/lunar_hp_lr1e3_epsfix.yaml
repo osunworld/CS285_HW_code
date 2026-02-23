@@ -1,0 +1,8 @@
+# experiments/dqn/hyperparameters/lunar_hp_lr1e3_epsfix.yaml
+# "epsilon 0.02 평가 문제 교정" 실험용
+base_config: dqn_basic
+env_name: LunarLander-v2
+use_double_q: true
+target_update_period: 1000
+learning_rate: 0.001
+exp_name: lunar_hp_lr1e3_epsfix
