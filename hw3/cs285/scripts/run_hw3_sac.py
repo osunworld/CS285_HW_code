@@ -19,7 +19,7 @@ import tqdm
 from cs285.infrastructure import utils
 from cs285.infrastructure.logger import Logger
 
-from scripting_utils import make_logger, make_config
+from cs285.scripts.scripting_utils import make_logger, make_config
 
 import argparse
 

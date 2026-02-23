@@ -202,7 +202,8 @@ class SoftActorCritic(nn.Module):
         """
         # reward/done은 보통 (batch,) 벡터
         (batch_size,) = reward.shape
-
+        reward = reward.float()
+        done = done.float()
         # Compute target values
         # Important: we don't need gradients for target values!
         with torch.no_grad():
@@ -228,7 +229,7 @@ class SoftActorCritic(nn.Module):
                 # TODO(student): Add entropy bonus to the target values for SAC
                 # SAC에서는 타깃에 alpha * H(pi(.|s_{t+1}))를 더해 탐험성을 보존
                 next_action_entropy = -next_action_distribution.log_prob(next_action) # shape (num_actor_samples, batch_size)
-                next_qs += temperature * next_action_entropy[None]  # actor 샘플 축 평균
+                next_qs += self.temperature * next_action_entropy[None]  # actor 샘플 축 평균
 
             # Compute the target Q-value
             # Bellman 타깃:
