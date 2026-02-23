@@ -13,7 +13,7 @@ from cs285.infrastructure import utils  # 평가 rollout 수집 함수
 from cs285.infrastructure.logger import Logger  # 텐서보드 로깅 유틸
 from cs285.infrastructure.replay_buffer import MemoryEfficientReplayBuffer, ReplayBuffer  # 버퍼 구현
 
-from scripting_utils import make_logger, make_config  # config/logger 생성 헬퍼
+from cs285.scripts.scripting_utils import make_logger, make_config
 
 MAX_NVIDEO = 2  # 현재 스크립트에서는 직접 사용하지 않지만 템플릿 호환을 위해 유지
 
