@@ -2,8 +2,9 @@ env_name: cheetah-cs285-v0
 exp_name: cheetah_0iter
 
 base_config: mpc
-num_layers: 1
+num_layers: 2
 hidden_size: 32
+learning_rate: 0.003
 
 num_iters: 1
 initial_batch_size: 20000

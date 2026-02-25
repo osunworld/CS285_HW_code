@@ -25,7 +25,7 @@ import tqdm
 from cs285.infrastructure import utils
 from cs285.infrastructure.logger import Logger
 
-from scripting_utils import make_logger, make_config
+from cs285.scripts.scripting_utils import make_logger, make_config
 
 import argparse
 
@@ -263,6 +263,7 @@ def run_training_loop(
                 # train SAC
                 # SAC는 매 step마다 버퍼에서 batch를 꺼내 오프폴리시 업데이트
                 batch = sac_replay_buffer.sample(sac_config["batch_size"])
+                batch = ptu.from_numpy(batch) 
                 sac_agent.update(
                     batch["observations"],
                     batch["actions"],
