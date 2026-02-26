@@ -1,6 +1,9 @@
 from typing import Callable, Optional, Sequence, Tuple, List
 import torch
 from torch import nn
+import numpy as np
+import cs285.infrastructure.pytorch_util as ptu
+
 
 
 from cs285.agents.dqn_agent import DQNAgent
@@ -25,6 +28,13 @@ class AWACAgent(DQNAgent):
         # advantage 가중치 exp(A / temperature)에서 분모 역할
         # temperature가 작을수록 높은 A 행동에 더 집중한다.
         self.temperature = temperature
+
+    def get_action(self, observation: np.ndarray, epsilon: float = 0.0) -> int:
+        obs = ptu.from_numpy(np.asarray(observation))[None]
+        with torch.no_grad():
+            dist = self.actor(obs)                  # Categorical
+            action = torch.argmax(dist.probs, dim=-1)
+        return int(ptu.to_numpy(action).squeeze(0))
 
     def compute_critic_loss(
         self,
